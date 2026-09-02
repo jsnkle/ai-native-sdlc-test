@@ -1,7 +1,7 @@
 .PHONY: build test lint
 build:
-	python3 -m compileall -q app && echo "Build succeeded"
+	.venv/bin/python -m compileall -q app && echo "Build succeeded"
 test:
-	python3 -m pytest -q
+	.venv/bin/python -m pytest -q
 lint:
-	python3 -m pyflakes app tests
+	.venv/bin/python -m pyflakes app tests
