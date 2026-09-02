@@ -1,5 +1,5 @@
 # Spec: Expose claim status over HTTP for the customer portal (from intent.md, accepted 2026-09-02, commit 1d2f3c3)
-Status: draft. Policies applied: `ai-native-sdlc:secure-api-review` (plugin example policy, v0.1.0; placeholder owner). No brand, compliance, UX or data-classification policy skill was available in this session; see Areas of concern.
+Status: accepted (product owner, 2026-09-02; tech lead consulted on the server choice). Policies applied: `ai-native-sdlc:secure-api-review` (plugin example policy, v0.1.0; placeholder owner). No brand, compliance, UX or data-classification policy skill was available in this session; see Areas of concern.
 Record: none
 
 Written in a non-interactive session (2026-09-02). Where the intent left a decision open, this spec decides and says so. Anything only a human can answer is carried forward under Open questions.
