@@ -21,15 +21,6 @@ jobs:
       - run: |
           claude plugin marketplace add jsnkle/ai-native-sdlc
           claude plugin install ai-native-sdlc@jsnkle --scope user
-      - name: Trust the workspace so project settings (hooks, allow list) apply
-        run: |
-          python3 - <<'PY'
-          import json, os
-          p = os.path.expanduser('~/.claude.json')
-          d = json.load(open(p)) if os.path.exists(p) else {}
-          d.setdefault('projects', {})[os.getcwd()] = {'hasTrustDialogAccepted': True}
-          json.dump(d, open(p, 'w'))
-          PY
       - name: Smoke-test the project hooks on this runner
         run: |
           echo "claude $(claude --version)"
@@ -40,7 +31,7 @@ jobs:
       - name: Run eval suite
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: evals/run.sh
+        run: evals/run.sh evals/protected-paths-hold.json   # DIAGNOSTIC: one case, no trust step
       - name: Keep agent transcripts
         if: always()
         uses: actions/upload-artifact@v4
