@@ -1,5 +1,5 @@
 # Plan: Expose claim status over HTTP for the customer portal (from spec.md accepted 2026-09-02, commit 87b1280)
-Status: draft (written 2026-09-02 in a non-interactive session standing in for plan mode; the engineer accepts by merging or by a follow-up `plan: accept` commit).
+Status: accepted (engineer, 2026-09-02).
 
 Inputs read: `intent.md` (accepted 1d2f3c3), `spec.md` (accepted 87b1280), `CLAUDE.md`, `REVIEW.md`, `Makefile`, `.github/workflows/ci.yml`, `.claude/protected-paths`, `app/claims.py`, `tests/test_claims.py`, and the `secure-api-review` policy skill the spec applied. The interrogation the skill asks for (what could break, riskiest step, options not taken, parallelisable) is answered in the sections below because nobody was available to interview.
 
