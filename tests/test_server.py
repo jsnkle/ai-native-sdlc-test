@@ -4,7 +4,10 @@ parsing and error responses are exercised, not just the routes."""
 import http.client
 import json
 import logging
+import os
 import socket
+import subprocess
+import sys
 import threading
 import time
 
@@ -283,6 +286,7 @@ def test_create_server_binds_requested_address():
         (" " + KEY_A + " , " + KEY_B + " ", (KEY_A, KEY_B), None),
         (KEY_A + ",", (KEY_A,), "item 2"),
         ("," + KEY_A, (KEY_A,), "item 1"),
+        (KEY_A + "," + KEY_A, (KEY_A,), "item 2"),
     ],
 )
 def test_parse_api_keys(caplog, raw, expected, warning):
@@ -309,6 +313,22 @@ def test_parse_api_keys_refuses_short_key(raw, position):
     assert "item" in message
     assert position in message
     assert "k" * 31 not in message
+    assert KEY_A not in message
+
+
+@pytest.mark.parametrize(
+    "raw, position",
+    [("ké" * 20, "item 1"), (KEY_A + "," + "é" * 32, "item 2")],
+)
+def test_parse_api_keys_refuses_non_ascii_key(raw, position):
+    """The base class decodes headers as Latin-1, so a non-ASCII key sent as
+    UTF-8 could never match; refuse it at startup instead of answering 401s."""
+    with pytest.raises(ValueError) as excinfo:
+        parse_api_keys(raw)
+    message = str(excinfo.value)
+    assert "non-ASCII" in message
+    assert position in message
+    assert "é" not in message
     assert KEY_A not in message
 
 
@@ -349,6 +369,75 @@ def test_create_server_stores_digests():
         assert KEY_B not in state
     finally:
         server.server_close()
+
+
+# -- Entry point (plan step 5). ``main()`` runs as a real subprocess so the exit
+# code and the startup lines are tested as an operator sees them.
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def start_main(keys):
+    """Start ``python -m app.server`` on a free port with only the env we choose."""
+    env = {name: value for name, value in os.environ.items() if not name.startswith("CLAIMS_")}
+    env["CLAIMS_PORT"] = "0"
+    if keys is not None:
+        env["CLAIMS_LETTERS_API_KEYS"] = keys
+    return subprocess.Popen(
+        [sys.executable, "-m", "app.server"],
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+def test_main_refuses_short_key():
+    """Spec AC5: a short key stops startup with exit code 2 and never names the key."""
+    proc = start_main("k" * 20)
+    _, stderr = proc.communicate(timeout=10)
+    assert proc.returncode == 2
+    assert "ERROR" in stderr
+    assert "CLAIMS_LETTERS_API_KEYS" in stderr
+    assert "item 1" in stderr
+    assert "k" * 20 not in stderr
+    assert "listening on" not in stderr
+
+
+@pytest.mark.parametrize(
+    "keys, expected, warning",
+    [
+        (None, "letters endpoint disabled: CLAIMS_LETTERS_API_KEYS is not set", None),
+        (KEY_A + "," + KEY_B + ",", "letters endpoint enabled (2 keys)", "item 3"),
+    ],
+    ids=["disabled", "enabled"],
+)
+def test_main_logs_letters_state_before_listening(keys, expected, warning):
+    proc = start_main(keys)
+    lines = []
+    watchdog = threading.Timer(10, proc.kill)
+    watchdog.start()
+    try:
+        for line in iter(proc.stderr.readline, ""):
+            lines.append(line)
+            if "listening on" in line:
+                break
+    finally:
+        watchdog.cancel()
+        proc.terminate()
+        proc.communicate(timeout=10)
+    text = "".join(lines)
+    assert expected in text
+    assert "listening on 127.0.0.1:" in text
+    assert text.index(expected) < text.index("listening on")
+    if warning is not None:
+        assert "WARNING" in text
+        assert warning in text
+    else:
+        assert "WARNING" not in text
+    assert KEY_A not in text
+    assert KEY_B not in text
 
 
 # -- Letters route: the HTTP surface (plan step 4).

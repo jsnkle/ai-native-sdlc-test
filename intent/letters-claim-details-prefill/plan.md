@@ -107,9 +107,9 @@ Each step ends with `make build`, `make test`, `make lint` green. Steps 2 to 6 a
 Run before reporting done. Every automated line has a pass condition that needs no judgement.
 
 - `make build` ends with `Build succeeded`.
-- `make test` ends with `142 passed` and no `failed` or `error`: 60 existing, 11 in `tests/test_letters.py` (1 + 4 + 1 + 1 + 1 + 1 + 1 + 1), 71 new in `tests/test_server.py` (step 3: 8 + 2 + 6 + 2 = 18; step 4: 1 + 2 + 5 + 3 + 1 + 6 + 9 + 1 + 16 + 1 + 1 + 1 + 6 = 53). If the count differs, the test list above changed and this section is updated in the same commit.
+- `make test` ends with `148 passed` and no `failed` or `error`: 60 existing, 11 in `tests/test_letters.py` (1 + 4 + 1 + 1 + 1 + 1 + 1 + 1), 77 new in `tests/test_server.py` (step 3: 9 + 2 + 2 + 6 + 2 = 21; step 4: 1 + 2 + 5 + 3 + 1 + 6 + 9 + 1 + 16 + 1 + 1 + 1 + 6 = 53; step 5: 1 + 2 = 3; see Departures after review). If the count differs, the test list above changed and this section is updated in the same commit.
 - `make lint` prints nothing after the echoed `pyflakes` command line.
-- `git diff --stat main` lists exactly `app/letters.py`, `app/server.py`, `tests/test_letters.py`, `tests/test_server.py`, `CLAUDE.md`, and this `plan.md` when updated. Not `app/claims.py`, not `tests/test_claims.py`, not `requirements-dev.txt` (R16, R17, AC11, AC12).
+- `git diff --stat main` lists exactly `app/letters.py`, `app/server.py`, `tests/test_letters.py`, `tests/test_server.py`, `CLAUDE.md`, and this `plan.md` when updated, plus `intent.md` and `spec.md` for this change, which ride on the same branch and are part of the same PR. Not `app/claims.py`, not `tests/test_claims.py`, not `requirements-dev.txt` (R16, R17, AC11, AC12).
 - `grep -h "^import\|^from" app/letters.py app/server.py` lists only standard-library modules, `app.claims` and `app.letters` (AC12).
 - Manual, once, via a throwaway Python driver that starts `python -m app.server` as a subprocess with a chosen environment and makes requests with `http.client` (the sandbox does not expand shell variables, so the driver sets `env=` itself):
   - No `CLAIMS_LETTERS_API_KEYS`: stdout contains `letters endpoint disabled`; `GET /claims/C-1002/letter-details` with any header is `404` (AC4).
@@ -129,6 +129,16 @@ Recorded in the same commit as the code, per step 7.
 - **Shape check shared.** `app/server.py` gained a one-line `_well_formed(claim_id)` helper used by both claim routes, instead of repeating the length-and-pattern test in `_letter_details`. Same rule, one place.
 - **Disabled-state test and `HEAD`.** `test_letter_details_disabled_is_404_on_every_method` asserts the exact `404` body for every method except `HEAD`, which carries no body by protocol. The status code and the absence of `Allow` are asserted for all nine.
 - **Startup line order.** `main()` logs the letters enabled or disabled line before the `listening on` line, so `make run` now prints two lines before the first access line. `CLAUDE.md` says so.
+
+## Departures after review (2026-09-02, PR #8)
+
+Each answers a review thread on the PR; recorded in the same commit as the change.
+
+- **Tests on `main()` after all.** The review found the three `main()` behaviours (exit 2 on a short key, the enabled line, the disabled line) untested, against the CLAUDE.md convention; step 5's "no tests on `main`" is withdrawn and the matching entry under Options not taken no longer applies. `tests/test_server.py` gains `test_main_refuses_short_key` (a `python -m app.server` subprocess with a 20-character key: exit code 2, `ERROR`, `CLAIMS_LETTERS_API_KEYS` and `item 1` in stderr, the key and `listening on` absent) and `test_main_logs_letters_state_before_listening` (parametrised: no keys gives the disabled line; two keys and a trailing comma give `enabled (2 keys)` and a warning naming `item 3`; both precede `listening on`; neither key appears). The Proof's manual AC4 and AC5 checks on startup output are therefore automated; the request-level manual checks stand.
+- **Non-ASCII keys refused at startup.** `parse_api_keys` raises the same positional `ValueError` for an item that is not pure ASCII, with a message naming the position and never the value. Reason: `http.server` decodes header values as Latin-1, so a non-ASCII key sent as UTF-8 by the client could never match and the operator would see the endpoint reported enabled but every request answered `401`. Test: `test_parse_api_keys_refuses_non_ascii_key` (parametrised, 2). `CLAUDE.md` and the Interfaces line for `parse_api_keys` now read "ASCII"; the spec's "at least 32 characters" (R7) is tightened, not overturned.
+- **Duplicate keys dropped with a warning.** A repeat of an earlier item is ignored with a `WARNING` naming its position, like an empty item, so `letters endpoint enabled (N keys)` counts distinct keys and an operator mid-rotation is not told two keys overlap when one is live. One new case in `test_parse_api_keys`.
+- **`METHOD_NOT_ALLOWED` constant.** The `405` body literal appeared twice in `_method_not_allowed` while every other error body was a module constant; it is now one constant beside them. No behaviour change.
+- **Proof diff line.** The `git diff --stat main` line now says `intent.md` and `spec.md` are in the diff too, since the intent, spec and plan commits ride on this branch.
 
 ## Options not taken
 

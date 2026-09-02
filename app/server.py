@@ -48,6 +48,7 @@ NOT_FOUND = {"error": "not_found"}
 BAD_REQUEST = {"error": "bad_request"}
 UNAUTHORIZED = {"error": "unauthorized"}
 UNAVAILABLE = {"error": "unavailable"}
+METHOD_NOT_ALLOWED = {"error": "method_not_allowed"}
 INTERNAL_ERROR = {"error": "internal_error"}
 
 
@@ -72,9 +73,13 @@ def parse_api_keys(raw):
 
     ``None``, empty or whitespace-only gives ``()``: the letters endpoint is
     disabled. Items are comma-separated and stripped. An empty item (a trailing
-    comma on rotation) is dropped with a warning rather than stopping the
-    service. A short item raises ``ValueError``; the message names the item's
-    position and never its value, because ``main`` logs it.
+    comma on rotation) and a repeat of an earlier item are each dropped with a
+    warning rather than stopping the service, so the key count ``main`` logs
+    is the number of distinct keys. A short or non-ASCII item raises
+    ``ValueError``; the message names the item's position and never its value,
+    because ``main`` logs it. Non-ASCII is refused because the base class
+    decodes header values as Latin-1, so such a key could never match a client
+    that sends it as UTF-8, and the operator would see only ``401``s.
     """
     if raw is None or not raw.strip():
         return ()
@@ -89,6 +94,11 @@ def parse_api_keys(raw):
                 "CLAIMS_LETTERS_API_KEYS: item %d is shorter than %d characters"
                 % (position, API_KEY_MIN_LENGTH)
             )
+        if not key.isascii():
+            raise ValueError("CLAIMS_LETTERS_API_KEYS: item %d contains a non-ASCII character" % position)
+        if key in keys:
+            logger.warning("CLAIMS_LETTERS_API_KEYS: item %d repeats an earlier key and was ignored", position)
+            continue
         keys.append(key)
     return tuple(keys)
 
@@ -257,9 +267,9 @@ class ClaimsHandler(BaseHTTPRequestHandler):
 
     def _method_not_allowed(self, path):
         if HEALTH_PATH.fullmatch(path) or CLAIMS_PATH.fullmatch(path):
-            return self._send_json(405, {"error": "method_not_allowed"}, {"Allow": "GET"})
+            return self._send_json(405, METHOD_NOT_ALLOWED, {"Allow": "GET"})
         if LETTERS_PATH.fullmatch(path) and self.server.letters_key_digests:
-            return self._send_json(405, {"error": "method_not_allowed"}, {"Allow": "GET"})
+            return self._send_json(405, METHOD_NOT_ALLOWED, {"Allow": "GET"})
         return self._send_json(404, NOT_FOUND)  # disabled letters path: no Allow, no hint
 
 
