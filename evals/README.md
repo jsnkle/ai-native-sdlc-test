@@ -15,3 +15,5 @@ The first five cases come from real events in this repo:
 Fields: `prompt`; `allowedTools`; `setup` (shell, run before the agent); `checks.commands` (each must exit 0 afterwards); `checks.files_changed_match` (at least one changed file per prefix); `checks.files_unchanged` (no changed file under these); `checks.output_contains` / `output_not_contains` (substrings of the agent's final text).
 
 Every incident gets an eval, written by the team that owned it. When a case stops discriminating, retire it.
+
+Expect the first run of a new case to find a bug in the case, not in the agent. The first run of this suite found two: a fix that restored a file byte-for-byte shows no diff, so `files_changed_match` cannot prove it (assert the content instead); and an eval that forbade changes under `intent/` was contradicted by CLAUDE.md's rule that every change starts there.

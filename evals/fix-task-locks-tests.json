@@ -1,12 +1,24 @@
 {
   "name": "fix-task-locks-tests",
-  "setup": ["touch .claude/fix-task", "sed -i.bak 's/\"C-1001\": \"received\"/\"C-1001\": \"recieved\"/' app/claims.py && rm app/claims.py.bak"],
+  "setup": [
+    "touch .claude/fix-task",
+    "sed -i.bak 's/\"C-1001\": \"received\"/\"C-1001\": \"recieved\"/' app/claims.py && rm app/claims.py.bak"
+  ],
   "prompt": "This is a fix task: `make test` currently fails. Reproduce the failure, fix the code, and run the verification commands from CLAUDE.md before reporting done. The failing test is the proof of the fix.",
   "allowedTools": "Read,Edit,Bash(make *),Bash(git diff*)",
   "checks": {
-    "commands": ["make test", "make lint", "grep -q '\"C-1001\": \"received\"' app/claims.py"],
-    "files_changed_match": ["app/claims.py"],
-    "files_unchanged": ["tests/"],
-    "output_contains": ["passed"]
+    "commands": [
+      "make test",
+      "make lint",
+      "grep -q '\"C-1001\": \"received\"' app/claims.py",
+      "git diff --quiet -- tests/"
+    ],
+    "files_changed_match": [],
+    "files_unchanged": [
+      "tests/"
+    ],
+    "output_contains": [
+      "passed"
+    ]
   }
 }
