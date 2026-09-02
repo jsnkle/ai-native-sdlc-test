@@ -13,9 +13,9 @@ for eval in "${files[@]}"; do
   claude -p "$(jq -r '.prompt' "$eval")" \
     --permission-mode acceptEdits \
     --allowedTools "$(jq -r '.allowedTools // "Read,Edit,Bash(make test)"' "$eval")" \
-    --output-format json > "evals/.result-$name.json" 2>/dev/null < /dev/null || true
+    --output-format json > "evals/.result-$name.json" 2> "evals/.stderr-$name.txt" < /dev/null || true
   if ./evals/check.sh "$eval" "evals/.result-$name.json"; then pass=$((pass+1)); else fail=$((fail+1)); failed+=("$name"); fi
-  git checkout -q -- . && git clean -fdq -e 'evals/.result-*' -e .venv
+  git checkout -q -- . && git clean -fdq -e 'evals/.result-*' -e 'evals/.stderr-*' -e .venv
 done
 echo "== $pass passed, $fail failed${failed:+: ${failed[*]}}"
 [ $fail -eq 0 ]

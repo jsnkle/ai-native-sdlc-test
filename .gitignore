@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 ops/log/
 evals/.result-*.json
+evals/.stderr-*.txt
