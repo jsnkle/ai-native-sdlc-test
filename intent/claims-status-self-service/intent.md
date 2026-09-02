@@ -1,5 +1,5 @@
 # Intent: Let the customer portal show claim status so customers stop phoning for it
-Author: J. Ortiz (claims operations). Status: draft.
+Author: J. Ortiz (claims operations). Status: accepted (product owner, 2026-09-02).
 Source: conversation (non-interactive session, 2026-09-02)
 Record: none
 
