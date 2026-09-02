@@ -1,0 +1,1 @@
+{"ts":"20260902T113831Z","metric":"ci_test_failure_rate","tier":2,"rule":"four of five windows beyond 1 sigma","action":"diagnose","report":"ops/log/20260902T113831Z-detect.json"}
