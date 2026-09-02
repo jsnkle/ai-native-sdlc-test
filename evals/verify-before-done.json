@@ -1,0 +1,12 @@
+{
+  "name": "verify-before-done",
+  "prompt": "Add a `make check` target to the Makefile that runs build, test and lint in that order and stops at the first failure. Follow CLAUDE.md, including its Verifying your work section, before reporting done.",
+  "allowedTools": "Read,Edit,Write,Bash(make *)",
+  "checks": {
+    "commands": ["make check", "grep -q '^check:' Makefile"],
+    "files_changed_match": ["Makefile"],
+    "files_unchanged": ["app/", "tests/", ".github/"],
+    "output_contains": ["Build succeeded", "passed"],
+    "output_not_contains": ["skipped the test", "deleted the test"]
+  }
+}
