@@ -32,12 +32,12 @@ Run each step by hand at first. Once the format is stable, `.github/workflows/sp
 
 Decide once per project and record it here:
 
-- [ ] **Repo is the source of truth.** These files are authoritative; Jira/ServiceNow/requirements tools hold a link to the commit.
+- [x] **Repo is the source of truth.** These files are authoritative; Jira/ServiceNow/requirements tools hold a link to the commit.
 - [ ] **Legacy system is the source of truth.** Jira holds the record; these files are working copies. Claude reads the record at the start of the session and writes the outcome back through the MCP connector.
 - [ ] **Linkage only.** Two sources of truth, always cross-referenced.
 
 Minimum bar regardless of choice: every `intent.md` carries the record ID (`Record: PROJ-123`) and the record carries the commit SHA of the file.
 
-**This project's decision:** not yet made; owed by the tech lead.
+**This project's decision (2026-09-02, tech lead):** the repo is the source of truth. There is no ticket system. `Record:` carries the GitHub issue or PR number once one exists, otherwise `Record: none`.
 
 The adoption assessment (2026-09-02) found no ticket system to link to: no Jira keys in commit messages, no git remote, no PR history. Until the tech lead ticks a box above, treat the repo as the source of truth and write the `Record:` line as the GitHub issue or PR number once the repo has a remote, or `Record: none` before then.

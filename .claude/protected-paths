@@ -12,3 +12,8 @@
 # Worth considering now, so the guard cannot be edited away by the agent it guards:
 #   .claude/hooks/**
 #   .claude/protected-paths
+
+# Decided 2026-09-02: the guard cannot be edited away by the agent it guards.
+.claude/hooks/**
+.claude/protected-paths
+.github/workflows/**

@@ -17,7 +17,16 @@
       "Bash(git log*)",
       "Bash(make build)",
       "Bash(make test)",
-      "Bash(make lint)"
+      "Bash(make lint)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git checkout*)",
+      "Bash(git switch*)",
+      "Bash(git branch*)",
+      "Bash(gh pr *)",
+      "Bash(gh api *)",
+      "Bash(gh run *)"
     ],
     "deny": [
       "Read(.env*)"

@@ -31,7 +31,8 @@ There is no run target: the service is a library module with no web layer yet.
 
 ## Things Claude gets wrong
 
-<!-- Nothing recorded yet. Add a line the second time the same mistake happens. -->
+- Nothing recorded yet. Add a line the second time the same mistake happens.
+- Any command containing both `deploy` and `production` is blocked by `.claude/hooks/production-gate.sh` until `RELEASE_APPROVAL` is set; there is no deploy target yet, and the pattern stays broad until one exists.
 
 ## Verifying your work
 
