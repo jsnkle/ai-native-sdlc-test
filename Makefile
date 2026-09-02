@@ -4,6 +4,6 @@ build:
 test:
 	.venv/bin/python -m pytest -q
 lint:
-	.venv/bin/python -m pyflakes app tests
+	.venv/bin/python -m pyflakes app tests ops
 run:
 	.venv/bin/python -m app.server
