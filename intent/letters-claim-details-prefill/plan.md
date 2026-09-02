@@ -107,7 +107,7 @@ Each step ends with `make build`, `make test`, `make lint` green. Steps 2 to 6 a
 Run before reporting done. Every automated line has a pass condition that needs no judgement.
 
 - `make build` ends with `Build succeeded`.
-- `make test` ends with `138 passed` and no `failed` or `error`: 57 existing, 11 in `tests/test_letters.py` (1 + 4 + 1 + 1 + 1 + 1 + 1 + 1), 70 new in `tests/test_server.py` (step 3: 8 + 2 + 6 + 2 = 18; step 4: 1 + 2 + 5 + 3 + 1 + 6 + 9 + 1 + 16 + 1 + 1 + 1 + 6 = 52). If the count differs, the test list above changed and this section is updated in the same commit.
+- `make test` ends with `142 passed` and no `failed` or `error`: 60 existing, 11 in `tests/test_letters.py` (1 + 4 + 1 + 1 + 1 + 1 + 1 + 1), 71 new in `tests/test_server.py` (step 3: 8 + 2 + 6 + 2 = 18; step 4: 1 + 2 + 5 + 3 + 1 + 6 + 9 + 1 + 16 + 1 + 1 + 1 + 6 = 53). If the count differs, the test list above changed and this section is updated in the same commit.
 - `make lint` prints nothing after the echoed `pyflakes` command line.
 - `git diff --stat main` lists exactly `app/letters.py`, `app/server.py`, `tests/test_letters.py`, `tests/test_server.py`, `CLAUDE.md`, and this `plan.md` when updated. Not `app/claims.py`, not `tests/test_claims.py`, not `requirements-dev.txt` (R16, R17, AC11, AC12).
 - `grep -h "^import\|^from" app/letters.py app/server.py` lists only standard-library modules, `app.claims` and `app.letters` (AC12).
@@ -118,6 +118,17 @@ Run before reporting done. Every automated line has a pass condition that needs 
   - The captured stdout for the run contains `/claims/{id}/letter-details` and none of `C-1002`, `A. Example`, `P-88213`, `2026-08-14`, `H. Handler` or either key (AC9).
 - Latency, informational only: 200 sequential authenticated `GET /claims/C-1002/letter-details` calls report a maximum under 50 ms. Not a gating test.
 - Human, tracked on the PR and not automatable: AC13 (Priya confirms DocGen sends `X-API-Key`, maps seven fields, opens blank on `401`, `404`, `503`), AC14 (security policy owner accepts service-side key check), AC15 (baseline for re-keying time and QA return rate recorded before go-live).
+
+## Departures during implementation (2026-09-02)
+
+Recorded in the same commit as the code, per step 7.
+
+- **Proof count corrected from 138 to 142.** Two causes. `main` gained three `tests/test_detect.py` tests (PR #6) after this plan was accepted; `origin/main` was merged into the branch before step 1, so the baseline is `60 passed`, not 57. And the step 4 sum was mis-added: the listed cases total 53, not 52, so the new server tests number 71, not 70. No test was added to or removed from the lists above.
+- **Step 1 baseline** therefore reads `60 passed`; nothing else in step 1 changed.
+- **`tests/test_server.py` fixtures.** The `port` fixture body moved into a shared `serve` helper so `letters_port` does not duplicate the start-and-shutdown sequence. The fixture's behaviour and every existing test function are unchanged; the diff on existing code is the `request` helper's `headers` argument and this fixture refactor.
+- **Shape check shared.** `app/server.py` gained a one-line `_well_formed(claim_id)` helper used by both claim routes, instead of repeating the length-and-pattern test in `_letter_details`. Same rule, one place.
+- **Disabled-state test and `HEAD`.** `test_letter_details_disabled_is_404_on_every_method` asserts the exact `404` body for every method except `HEAD`, which carries no body by protocol. The status code and the absence of `Allow` are asserted for all nine.
+- **Startup line order.** `main()` logs the letters enabled or disabled line before the `listening on` line, so `make run` now prints two lines before the first access line. `CLAUDE.md` says so.
 
 ## Options not taken
 
