@@ -6,7 +6,10 @@ root="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 list="$root/.claude/protected-paths"
 [ -f "$list" ] || exit 0
 
-path=$(jq -r '.tool_input.file_path // empty' < /dev/stdin)
+input=$(cat)
+path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty')
+# Diagnostic (temporary): record every invocation so a CI run can prove the hook was called.
+printf '%s root=%s path=%s\n' "$(date -u +%FT%TZ)" "$root" "$path" >> "$root/evals/.hooklog.txt" 2>/dev/null || true
 [ -n "$path" ] || exit 0
 rel="${path#$root/}"
 

@@ -49,5 +49,6 @@ jobs:
           path: |
             evals/.result-*.json
             evals/.stderr-*.txt
+            evals/.hooklog.txt
           include-hidden-files: true
           if-no-files-found: ignore
