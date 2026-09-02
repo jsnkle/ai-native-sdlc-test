@@ -22,7 +22,7 @@ Not changed, deliberately:
 
 Each step is small enough to run `make build`, `make test`, `make lint` afterwards. Steps 1 through 5 are one PR.
 
-1. **Environment.** `.venv/` does not exist in this checkout. Create it exactly as `CLAUDE.md` says (`python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt`, Python 3.14.7 locally). Run the three make targets and confirm the baseline: `Build succeeded`, `2 passed`, lint prints nothing after the command line.
+1. **Environment.** If `.venv/` does not exist in the checkout, create it exactly as `CLAUDE.md` says (`python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt`, Python 3.14.7 locally). Run the three make targets and confirm the baseline: `Build succeeded`, `2 passed`, lint prints nothing after the command line. (Implementation, 2026-09-02: `.venv/` was already present; baseline confirmed.)
 
 2. **Server skeleton with the safe defaults first** (`app/server.py`). Before any route exists, neutralise the base-class behaviours that would violate the spec on their own:
    - `log_message` and `log_request` overridden to no-ops. The base class writes every raw request line (which contains the id) to stderr; this is the leak spec R11 forbids.
@@ -32,9 +32,9 @@ Each step is small enough to run `make build`, `make test`, `make lint` afterwar
    - `protocol_version` left at the default `HTTP/1.0` (see Options not taken).
    - A single `_send_json(code, payload, extra_headers=None)` helper that sets `Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`, `Content-Length`, and writes the UTF-8 body. Every response, including errors, goes through it.
 
-3. **Routing and the two routes.** In `do_GET`: strip anything from `?` onward (query ignored, R-Interfaces), then match the path against exactly two patterns, `^/health$` and `^/claims/([^/]*)/status$`. No URL-decoding, no trailing-slash tolerance. For the claims route, the captured segment must match `^C-[0-9]+$` and be at most 32 characters; otherwise `404` without calling `get_status` (R5). On a match, call `get_status`; `KeyError` becomes `404` (R13); success is `200` with `{"claim_id": id, "status": status}`. Anything else is `404 {"error": "not_found"}` (R6). `do_POST`, `do_PUT`, `do_PATCH`, `do_DELETE`, `do_HEAD`, `do_OPTIONS` all call one `_method_not_allowed` that returns `405` with `Allow: GET` when the path is a known route and `404` otherwise (R7 applies to known paths only). Wrap the whole `do_*` body in a `try`/`except Exception` that answers `500 {"error": "internal_error"}` (Design, Behaviour).
+3. **Routing and the two routes.** In `do_GET`: strip anything from `?` onward (query ignored, R-Interfaces), then match the path against exactly two patterns, `^/health$` and `^/claims/([^/]*)/status$`. No URL-decoding, no trailing-slash tolerance. For the claims route, the captured segment must match `^C-[0-9]+$` and be at most 32 characters; otherwise `404` without calling `get_status` (R5). On a match, call `get_status`; `KeyError` becomes `404` (R13); success is `200` with `{"claim_id": id, "status": status}`. Anything else is `404 {"error": "not_found"}` (R6). `do_POST`, `do_PUT`, `do_PATCH`, `do_DELETE`, `do_HEAD`, `do_OPTIONS`, `do_TRACE`, `do_CONNECT` (the eight standard non-GET methods; `TRACE` and `CONNECT` were added at implementation so every standard method meets R7) all call one `_method_not_allowed` that returns `405` with `Allow: GET` and body `{"error": "method_not_allowed"}` when the path is a known route and `404` otherwise (R7 applies to known paths only). Wrap the whole `do_*` body in a `try`/`except Exception` that answers `500 {"error": "internal_error"}` (Design, Behaviour).
 
-4. **Access log and error log without ids.** A module logger `app.server`. Every request handled by a `do_*` method emits one INFO line: method, templated path, status code, duration in ms from `time.perf_counter`. The templated path is one of `/claims/{id}/status`, `/health` or `/other`; the raw path is never formatted into a log record, including for unknown paths (an unknown path such as `/claims/C-1001/status/` still carries an id). The `500` branch logs the exception class name and `traceback.format_tb` frames at ERROR, not `str(exc)`, because an exception message could carry the id.
+4. **Access log and error log without ids.** A module logger `app.server`. Every request handled by a `do_*` method emits one INFO line: method, templated path, status code, duration in ms from `time.perf_counter`. The templated path is one of `/claims/{id}/status`, `/health` or `/other`; the raw path is never formatted into a log record, including for unknown paths (an unknown path such as `/claims/C-1001/status/` still carries an id). The `500` branch logs the exception class name and the traceback frames as file, line and function (`traceback.extract_tb`, no source text) at ERROR, not `str(exc)`, because an exception message could carry the id. (Changed at implementation from `traceback.format_tb`: that includes each frame's source line, and the `500` test below deliberately raises from a source line containing `C-1001 secret`, so `format_tb` fails the plan's own test.)
 
 5. **Factory and entry point.** `create_server(host="127.0.0.1", port=8000)` returns a `ThreadingHTTPServer` with `daemon_threads = True` and `allow_reuse_address = True`. `main()` reads `CLAIMS_HOST` and `CLAIMS_PORT`, calls `logging.basicConfig(level=INFO)`, serves forever, and closes cleanly on `KeyboardInterrupt`. The loopback default is deliberate: the spec's trust boundary is "reachable only from the portal or gateway", so exposing the service on all interfaces is an operator's explicit choice, never the default. `python -m app.server` runs `main()`.
 
@@ -43,7 +43,7 @@ Each step is small enough to run `make build`, `make test`, `make lint` afterwar
    - `test_unknown_claim_is_404`: `C-9999`, exact body.
    - `test_malformed_ids_are_404` (parametrised): `nonsense`, empty (`/claims//status`), trailing slash (`/claims/C-1001/status/`), lowercase `c-1001`, `C-` followed by 40 digits (length 42), `C-1001%0A`. Each asserts the exact `404` body and that the input does not appear in the body (R4). Uses `monkeypatch` on `app.server.get_status` to a function that raises `AssertionError` so any lookup on a malformed id fails the test (R5).
    - `test_unknown_paths_are_404`: `/`, `/claims`, `/claims/C-1001`, `/health/`.
-   - `test_non_get_on_known_path_is_405_with_allow_get` (parametrised over POST, PUT, PATCH, DELETE, HEAD, OPTIONS, and both known paths): AC3.
+   - `test_non_get_on_known_path_is_405_with_allow_get` (parametrised over POST, PUT, PATCH, DELETE, HEAD, OPTIONS, TRACE, CONNECT, and both known paths): AC3.
    - `test_non_get_on_unknown_path_is_404`.
    - `test_health`: AC4, headers included.
    - `test_query_string_is_ignored`: `/claims/C-1001/status?x=1` is `200`.
@@ -77,18 +77,18 @@ Each step is small enough to run `make build`, `make test`, `make lint` afterwar
 
 **Fixture port reuse.** Binding port 0 avoids collisions with anything else on the machine, including a `make run` left open. Teardown must call `shutdown()` before `server_close()` or the daemon thread can hold the socket into the next module.
 
-**Exotic method tokens.** `do_*` methods are defined for the seven standard non-GET methods. A request with an unknown method token (for example `BREW`) gets the base class's `501`, now with a JSON body through the `send_error` override. This is a narrow reading of R7 ("any method other than GET"); it is recorded here so a reviewer does not read it as an omission.
+**Exotic method tokens.** `do_*` methods are defined for the eight standard non-GET methods. A request with an unknown method token (for example `BREW`) gets the base class's `501`, now with a JSON body through the `send_error` override. This is a narrow reading of R7 ("any method other than GET"); it is recorded here so a reviewer does not read it as an omission.
 
 ## Proof
 
 Run before reporting done. Every automated line has a pass condition that needs no judgement.
 
 - `make build` ends with `Build succeeded`.
-- `make test` ends with `15 passed` (2 existing plus 13 new) and no `failed` or `error`. If the count differs, the test list above changed and this section is updated in the same commit.
+- `make test` ends with `35 passed` (2 existing plus 13 new test functions, of which two are parametrised: 6 malformed-id cases and 8 methods x 2 paths = 16 method cases) and no `failed` or `error`. If the count differs, the test list above changed and this section is updated in the same commit. (Corrected at implementation from `15 passed`, which counted functions rather than pytest's expanded cases.)
 - `make lint` prints nothing after the echoed `pyflakes` command line.
 - Existing contract: `tests/test_claims.py` is unchanged in `git diff --stat` and both its tests pass (AC5).
 - No runtime dependency: `git diff --name-only` does not include `requirements-dev.txt`, and `grep -h "^import\|^from" app/server.py` lists only standard-library modules and `app.claims` (AC7).
-- Manual, once, with `make run` in a second terminal, each response checked against the spec:
+- Manual, once, with `make run` in a second terminal (or, in a non-interactive session, a throwaway Python driver that starts `python -m app.server` as a subprocess and makes the same requests with `http.client`; done that way on 2026-09-02), each response checked against the spec:
   - `curl -si http://127.0.0.1:8000/claims/C-1001/status` returns `200`, body `{"claim_id": "C-1001", "status": "received"}`, `Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`, `Server: claims-portal` (AC1).
   - `curl -si http://127.0.0.1:8000/claims/C-9999/status`, `.../claims/nonsense/status`, `.../claims//status`, `.../claims/C-1001/status/` each return `404` with body `{"error": "not_found"}` (AC2).
   - `curl -si -X POST http://127.0.0.1:8000/claims/C-1001/status` returns `405` with `Allow: GET` (AC3).
