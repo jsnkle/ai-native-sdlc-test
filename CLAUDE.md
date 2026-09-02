@@ -12,7 +12,7 @@ All targets call `.venv/bin/python` directly, so the virtualenv must exist at `.
 - Build: `make build` (healthy output ends with `Build succeeded`; it is a byte-compile of `app/`)
 - Test: `make test` (healthy output ends with `N passed in 0.0Ns`, e.g. `2 passed in 0.00s`; any `failed` or `error` is a failure)
 - Lint: `make lint` (healthy output is only the echoed `pyflakes` command line with nothing after it; each problem prints as `path:line: message`)
-- Run: `make run` (healthy output is one line, `... INFO app.server listening on 127.0.0.1:8000`, then one access line per request such as `GET /claims/{id}/status 200 0.1ms`; stop it with Ctrl-C). `CLAIMS_HOST` and `CLAIMS_PORT` override the bind address; the loopback default is deliberate, the service is meant to be reachable only from the portal or gateway.
+- Run: `make run` (healthy output is two lines, `... INFO app.server letters endpoint disabled: CLAIMS_LETTERS_API_KEYS is not set` or `... letters endpoint enabled (N keys)`, then `... INFO app.server listening on 127.0.0.1:8000`, then one access line per request such as `GET /claims/{id}/status 200 0.1ms`; stop it with Ctrl-C). `CLAIMS_HOST` and `CLAIMS_PORT` override the bind address; the loopback default is deliberate, the service is meant to be reachable only from the portal or gateway. `CLAIMS_LETTERS_API_KEYS` (comma-separated, each at least 32 characters) enables the letters route; unset, the route answers `404`, and a short key stops startup with exit code 2 and an `ERROR` line naming the item's position, never the key.
 
 ## Conventions
 
@@ -24,7 +24,7 @@ All targets call `.venv/bin/python` directly, so the virtualenv must exist at `.
 
 ## Architecture
 
-- `app/` is the whole service. `app/claims.py` holds the in-memory status table (`STATUSES`) and the single lookup, `get_status`. `app/server.py` is the HTTP layer over it (standard-library `ThreadingHTTPServer`): `GET /claims/{id}/status`, `GET /health`, `404` for everything else, `405` for non-GET on a known path. It does no authentication and never logs or echoes a claim id in an error; its only config is the two env vars above. There is no database.
+- `app/` is the whole service. `app/claims.py` holds the in-memory status table (`STATUSES`) and the single lookup, `get_status`. `app/letters.py` holds the letter-details fixture (`DETAILS`, same four ids) and `get_letter_details`, which returns exactly seven fields with `status` taken from `get_status`, plus `LettersUnavailable` for the future feed. `app/server.py` is the HTTP layer over both (standard-library `ThreadingHTTPServer`): `GET /claims/{id}/status`, `GET /claims/{id}/letter-details`, `GET /health`, `404` for everything else, `405` for non-GET on a known path. It authenticates only the letters route, by API key in `X-API-Key` (SHA-256 digests on the server object, constant-time compare, `401` before any id check, `404` on every method when no key is configured), and never logs or echoes a claim id, a letter field or a key; its only config is the three env vars above. There is no database.
 - `tests/` mirrors `app/` one-to-one.
 - There is no generated code. Protected paths are listed in `.claude/protected-paths` (currently empty) and a hook blocks edits there.
 
