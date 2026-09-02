@@ -1,5 +1,5 @@
 # Intent: Stop handlers re-typing claim details into the letters system
-Author: J. Ortiz (claims operations). Status: draft.
+Author: J. Ortiz (claims operations). Status: accepted (product owner, 2026-09-02).
 Source: conversation (non-interactive session, 2026-09-02)
 Record: none
 
