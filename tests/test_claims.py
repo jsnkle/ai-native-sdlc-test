@@ -15,3 +15,5 @@ def test_status_history_is_recorded():
     # WIP: status history is out of scope for claims-status-self-service and does not exist yet.
     from app.claims import get_status_history
     assert get_status_history("C-1001") == ["received"]
+
+# second attempt, still WIP
