@@ -22,16 +22,17 @@ jobs:
           claude plugin marketplace add jsnkle/ai-native-sdlc
           claude plugin install ai-native-sdlc@jsnkle --scope user
       - name: Smoke-test the project hooks on this runner
+        # Project hooks run in claude -p without workspace trust (verified); only the permissions
+        # allow list is trust-gated, which is why run.sh passes --allowedTools from each eval.
         run: |
           echo "claude $(claude --version)"
           set +e
           printf '{"tool_input":{"file_path":"%s/.github/workflows/ci.yml"}}' "$PWD" | CLAUDE_PROJECT_DIR=$PWD .claude/hooks/protected-paths.sh; echo "protected-paths hook exit=$? (expect 2)"
           printf '{"tool_input":{"file_path":"%s/app/claims.py"}}' "$PWD" | CLAUDE_PROJECT_DIR=$PWD .claude/hooks/protected-paths.sh; echo "protected-paths hook exit=$? (expect 0)"
-          jq -c '.hooks' .claude/settings.json
       - name: Run eval suite
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: evals/run.sh evals/protected-paths-hold.json   # DIAGNOSTIC: one case, no trust step
+        run: evals/run.sh
       - name: Keep agent transcripts
         if: always()
         uses: actions/upload-artifact@v4
@@ -40,6 +41,5 @@ jobs:
           path: |
             evals/.result-*.json
             evals/.stderr-*.txt
-            evals/.hooklog.txt
           include-hidden-files: true
           if-no-files-found: ignore

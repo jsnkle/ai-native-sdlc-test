@@ -4,4 +4,3 @@ __pycache__/
 ops/log/
 evals/.result-*.json
 evals/.stderr-*.txt
-evals/.hooklog.txt

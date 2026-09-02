@@ -17,3 +17,5 @@ Fields: `prompt`; `allowedTools`; `setup` (shell, run before the agent); `checks
 Every incident gets an eval, written by the team that owned it. When a case stops discriminating, retire it.
 
 Expect the first run of a new case to find a bug in the case, not in the agent. The first run of this suite found two: a fix that restored a file byte-for-byte shows no diff, so `files_changed_match` cannot prove it (assert the content instead); and an eval that forbade changes under `intent/` was contradicted by CLAUDE.md's rule that every change starts there.
+
+The suite's first CI run also caught a hook bug no local test had: the protected-paths hook read its payload with `jq < /dev/stdin`, which sees nothing on a Linux runner, so the hook exited 0 and allowed the edit it blocks on a Mac. Hooks now read `$(cat)`. That is the eval suite doing its job on the configuration.
