@@ -1,0 +1,14 @@
+# Paths Claude may not edit without a change ticket. Bash globs, relative to the repo root.
+# The protected-paths hook blocks Write/Edit here and explains why.
+#
+# Empty on purpose: the 2026-09-02 adoption assessment found no generated code, migrations,
+# infra or production workflows in claims-portal. The tech lead decides what goes here.
+# Typical entries once they exist:
+#   src/gen/**
+#   **/generated/**
+#   migrations/**
+#   infra/**
+#   .github/workflows/production-*.yml
+# Worth considering now, so the guard cannot be edited away by the agent it guards:
+#   .claude/hooks/**
+#   .claude/protected-paths
