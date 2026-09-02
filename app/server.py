@@ -90,6 +90,12 @@ class ClaimsHandler(BaseHTTPRequestHandler):
         self.close_connection = True
 
     def _send_json(self, code, payload, extra_headers=None):
+        # The base class writes no status line and no headers when it believes the
+        # request was HTTP/0.9: a genuine simple request, or (on Python 3.12) any
+        # request line it could not parse. Every response must carry the R8
+        # headers, so the service never answers in HTTP/0.9.
+        if self.request_version == "HTTP/0.9":
+            self.request_version = self.protocol_version
         body = json.dumps(payload).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", CONTENT_TYPE)

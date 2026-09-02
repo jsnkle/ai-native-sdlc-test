@@ -40,6 +40,20 @@ def request(port, method, path, body=None):
         conn.close()
 
 
+def raw_request(port, data):
+    """Send ``data`` verbatim on a fresh socket and return everything the
+    server writes back, for request lines ``http.client`` will not produce."""
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+        sock.sendall(data)
+        chunks = []
+        while True:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def wait_for_records(caplog, count, timeout=2.0):
     """The access line is logged after the response is written, so give the
     server thread a moment to catch up before inspecting caplog."""
@@ -146,24 +160,48 @@ def test_internal_error_is_500_without_details(port, monkeypatch, caplog):
     assert "secret" not in caplog.text
 
 
+@pytest.mark.parametrize(
+    "method, path, expected",
+    [
+        ("GET", "/claims/C-1001/status", 200),
+        ("GET", "/health", 200),
+        ("GET", "/claims/C-9999/status", 404),
+        ("GET", "/claims/nonsense/status", 404),
+        ("GET", "/nope", 404),
+        ("POST", "/claims/C-1001/status", 405),
+        ("GET", "/claims/C-1001/status", 500),
+    ],
+)
+def test_every_response_is_no_store(port, monkeypatch, method, path, expected):
+    """Spec R8: no cache between the gateway and the customer may hold a status,
+    so the header is asserted on every status code the routes can produce."""
+    if expected == 500:
+        monkeypatch.setattr(app.server, "get_status", lambda claim_id: 1 / 0)
+    status, headers, _ = request(port, method, path)
+    assert status == expected
+    assert headers["Cache-Control"] == "no-store"
+
+
 def test_bad_request_line_is_json_and_unlogged(port, caplog, capfd):
     caplog.set_level(logging.INFO, logger="app.server")
-    with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
-        sock.sendall(b"GET /claims/C-1001/status HTTP/1.1 extra\r\n\r\n")
-        chunks = []
-        while True:
-            chunk = sock.recv(4096)
-            if not chunk:
-                break
-            chunks.append(chunk)
-    raw = b"".join(chunks)
+    raw = raw_request(port, b"GET /claims/C-1001/status HTTP/1.1 extra\r\n\r\n")
     assert raw.startswith(b"HTTP/1.0 400 ")
     assert b"Content-Type: " + CONTENT_TYPE.encode() in raw
+    assert b"Cache-Control: no-store" in raw
     assert raw.endswith(b'\r\n\r\n{"error": "bad_request"}')
     assert b"C-1001" not in raw
     assert "request rejected" in caplog.text
     assert "C-1001" not in caplog.text
     assert "C-1001" not in capfd.readouterr().err
+
+
+def test_http_0_9_request_gets_status_line_and_headers(port):
+    """A simple request has no version, and the base class would answer it
+    with a bare body: no status line, no Cache-Control. R8 says every response."""
+    raw = raw_request(port, b"GET /health\r\n\r\n")
+    assert raw.startswith(b"HTTP/1.0 200 ")
+    assert b"Cache-Control: no-store" in raw
+    assert raw.endswith(b'\r\n\r\n{"status": "ok"}')
 
 
 def test_access_log_contains_no_claim_id(port, caplog):
