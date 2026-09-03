@@ -2,3 +2,5 @@ __pycache__/
 .pytest_cache/
 .venv/
 ops/log/
+evals/.result-*.json
+evals/.stderr-*.txt
