@@ -37,6 +37,7 @@ CLAIM_ID_PATTERN = re.compile(r"C-[0-9]+")
 CLAIM_ID_MAX_LENGTH = 32
 
 HEALTH_PATH = re.compile(r"/health")
+VERSION_PATH = re.compile(r"/version")
 CLAIMS_PATH = re.compile(r"/claims/([^/]*)/status")
 LETTERS_PATH = re.compile(r"/claims/([^/]*)/letter-details")
 
@@ -228,6 +229,9 @@ class ClaimsHandler(BaseHTTPRequestHandler):
         logger.info("%s %s %d %.1fms", self.command, template, code, duration_ms)
 
     def _get(self, path):
+        if VERSION_PATH.fullmatch(path):
+            # Reports the running build; set CLAIMS_BUILD at deploy time.
+            return self._send_json(200, {"build": os.environ.get("CLAIMS_BUILD", "dev")})
         if HEALTH_PATH.fullmatch(path):
             return self._send_json(200, {"status": "ok"})
         match = LETTERS_PATH.fullmatch(path)
