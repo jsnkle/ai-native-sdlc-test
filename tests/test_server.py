@@ -15,14 +15,14 @@ import pytest
 
 import app.server
 from app.letters import LettersUnavailable
-from app.server import _key_matches, create_server, parse_api_keys
+from app.server import BUILD_UNSET, _key_matches, create_server, parse_api_keys
 
 NOT_FOUND = '{"error": "not_found"}'
 UNAUTHORIZED = '{"error": "unauthorized"}'
 UNAVAILABLE = '{"error": "unavailable"}'
 CONTENT_TYPE = "application/json; charset=utf-8"
 METHODS = ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT"]
-KNOWN_PATHS = ["/claims/C-1001/status", "/health"]
+KNOWN_PATHS = ["/claims/C-1001/status", "/health", "/version"]
 
 # Two 40-character keys for the letters fixture. Obviously fake, never logged.
 KEY_A = "test-key-a-" + "a" * 29
@@ -169,6 +169,43 @@ def test_health(port):
     assert_json_headers(headers)
 
 
+def test_version_reports_configured_build(port, monkeypatch):
+    monkeypatch.setenv("CLAIMS_BUILD", "2026.09.03-7f3a1c2")
+    status, headers, body = request(port, "GET", "/version")
+    assert status == 200
+    assert body == '{"build": "2026.09.03-7f3a1c2"}'
+    assert_json_headers(headers)
+
+
+@pytest.mark.parametrize("value", [None, ""], ids=["unset", "empty"])
+def test_version_without_build_reports_unset_marker(port, monkeypatch, value):
+    """An operator must be able to tell an unconfigured host from a real build
+    name, which is the ambiguity the intent exists to remove."""
+    if value is None:
+        monkeypatch.delenv("CLAIMS_BUILD", raising=False)
+    else:
+        monkeypatch.setenv("CLAIMS_BUILD", value)
+    status, headers, body = request(port, "GET", "/version")
+    assert status == 200
+    assert body == '{"build": "%s"}' % BUILD_UNSET
+    assert_json_headers(headers)
+
+
+def test_version_needs_no_api_key(letters_port, monkeypatch):
+    """/version is anonymous like /health: it sits above the letters key check."""
+    monkeypatch.setenv("CLAIMS_BUILD", "2026.09.03-7f3a1c2")
+    status, _, body = request(letters_port, "GET", "/version")
+    assert status == 200
+    assert body == '{"build": "2026.09.03-7f3a1c2"}'
+
+
+def test_paths_near_version_are_404(port):
+    for path in ["/version/", "/versions", "/Version"]:
+        status, _, body = request(port, "GET", path)
+        assert (path, status) == (path, 404)
+        assert body == NOT_FOUND
+
+
 def test_query_string_is_ignored(port):
     status, _, body = request(port, "GET", "/claims/C-1001/status?x=1")
     assert status == 200
@@ -196,6 +233,7 @@ def test_internal_error_is_500_without_details(port, monkeypatch, caplog):
     [
         ("GET", "/claims/C-1001/status", 200),
         ("GET", "/health", 200),
+        ("GET", "/version", 200),
         ("GET", "/claims/C-9999/status", 404),
         ("GET", "/claims/nonsense/status", 404),
         ("GET", "/nope", 404),
@@ -255,6 +293,15 @@ def test_access_log_contains_no_claim_id(port, caplog):
     assert any("GET /claims/{id}/status 200" in m for m in messages)
     assert any("GET /claims/{id}/status 404" in m for m in messages)
     assert any("GET /other 404" in m for m in messages)
+
+
+def test_access_log_names_the_version_route(port, caplog):
+    """The access log is the only per-request signal this service emits, so a
+    route meant for post-deploy diagnosis must not log as /other."""
+    caplog.set_level(logging.INFO, logger="app.server")
+    request(port, "GET", "/version")
+    messages = [r.getMessage() for r in wait_for_records(caplog, 1)]
+    assert any("GET /version 200" in m for m in messages)
 
 
 def test_server_header_does_not_advertise_python(port):
@@ -377,12 +424,14 @@ def test_create_server_stores_digests():
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def start_main(keys):
+def start_main(keys, build=None):
     """Start ``python -m app.server`` on a free port with only the env we choose."""
     env = {name: value for name, value in os.environ.items() if not name.startswith("CLAIMS_")}
     env["CLAIMS_PORT"] = "0"
     if keys is not None:
         env["CLAIMS_LETTERS_API_KEYS"] = keys
+    if build is not None:
+        env["CLAIMS_BUILD"] = build
     return subprocess.Popen(
         [sys.executable, "-m", "app.server"],
         cwd=REPO_ROOT,
@@ -405,16 +454,8 @@ def test_main_refuses_short_key():
     assert "listening on" not in stderr
 
 
-@pytest.mark.parametrize(
-    "keys, expected, warning",
-    [
-        (None, "letters endpoint disabled: CLAIMS_LETTERS_API_KEYS is not set", None),
-        (KEY_A + "," + KEY_B + ",", "letters endpoint enabled (2 keys)", "item 3"),
-    ],
-    ids=["disabled", "enabled"],
-)
-def test_main_logs_letters_state_before_listening(keys, expected, warning):
-    proc = start_main(keys)
+def startup_output(proc):
+    """The startup lines an operator sees, up to and including ``listening on``."""
     lines = []
     watchdog = threading.Timer(10, proc.kill)
     watchdog.start()
@@ -427,7 +468,19 @@ def test_main_logs_letters_state_before_listening(keys, expected, warning):
         watchdog.cancel()
         proc.terminate()
         proc.communicate(timeout=10)
-    text = "".join(lines)
+    return "".join(lines)
+
+
+@pytest.mark.parametrize(
+    "keys, expected, warning",
+    [
+        (None, "letters endpoint disabled: CLAIMS_LETTERS_API_KEYS is not set", None),
+        (KEY_A + "," + KEY_B + ",", "letters endpoint enabled (2 keys)", "item 3"),
+    ],
+    ids=["disabled", "enabled"],
+)
+def test_main_logs_letters_state_before_listening(keys, expected, warning):
+    text = startup_output(start_main(keys))
     assert expected in text
     assert "listening on 127.0.0.1:" in text
     assert text.index(expected) < text.index("listening on")
@@ -438,6 +491,22 @@ def test_main_logs_letters_state_before_listening(keys, expected, warning):
         assert "WARNING" not in text
     assert KEY_A not in text
     assert KEY_B not in text
+
+
+@pytest.mark.parametrize(
+    "build, expected",
+    [
+        (None, "CLAIMS_BUILD is not set: /version reports %s" % BUILD_UNSET),
+        ("2026.09.03-7f3a1c2", "build identifier 2026.09.03-7f3a1c2"),
+    ],
+    ids=["unset", "set"],
+)
+def test_main_logs_build_identifier_before_listening(build, expected):
+    """Whether a build was configured has to be visible at startup too: /version
+    alone cannot say when the host was last deployed."""
+    text = startup_output(start_main(None, build=build))
+    assert expected in text
+    assert text.index(expected) < text.index("listening on")
 
 
 # -- Letters route: the HTTP surface (plan step 4).

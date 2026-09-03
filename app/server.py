@@ -1,13 +1,20 @@
 """HTTP layer over ``app.claims`` and ``app.letters``.
 
-Three routes: ``GET /claims/{id}/status`` and ``GET /health`` for the customer
-portal, and ``GET /claims/{id}/letter-details`` for DocGen. Everything else is
-``404``. The service authenticates only the letters route, by API key in
-``X-API-Key`` checked against ``CLAIMS_LETTERS_API_KEYS``; the other two trust
-the portal and the gateway in front of it (see
-``intent/claims-status-self-service/spec.md`` and
+Four routes: ``GET /claims/{id}/status`` and ``GET /health`` for the customer
+portal, ``GET /claims/{id}/letter-details`` for DocGen, and ``GET /version``
+for operators after a deploy. Everything else is ``404``. The service
+authenticates only the letters route, by API key in ``X-API-Key`` checked
+against ``CLAIMS_LETTERS_API_KEYS``; the other three trust the portal and the
+gateway in front of it (see ``intent/claims-status-self-service/spec.md`` and
 ``intent/letters-claim-details-prefill/spec.md``). With no key configured the
 letters route is not served at all.
+
+``GET /version`` echoes ``CLAIMS_BUILD`` verbatim to anyone who can reach the
+port, so the value is an operator contract: a plain build identifier, and never
+a secret, an internal hostname or a deploy path. Nothing in the code enforces
+that shape today; whether it should be validated at startup the way
+``parse_api_keys`` validates keys is an open question for
+``intent/health-reports-version/spec.md``, which is not written yet.
 
 Claim ids, letter fields and presented keys are never logged or echoed in an
 error body. The base class logs every raw request line and answers malformed
@@ -52,6 +59,11 @@ UNAVAILABLE = {"error": "unavailable"}
 METHOD_NOT_ALLOWED = {"error": "method_not_allowed"}
 INTERNAL_ERROR = {"error": "internal_error"}
 
+# Reported by ``GET /version`` when ``CLAIMS_BUILD`` is unset or empty. Not a
+# plausible build name, so an operator reading the response can tell "nothing
+# was configured on this host" from "the build really is called that".
+BUILD_UNSET = "unknown"
+
 
 def _template(path):
     """Return the log-safe shape of ``path``; the raw path is never logged."""
@@ -61,7 +73,18 @@ def _template(path):
         return "/claims/{id}/letter-details"
     if HEALTH_PATH.fullmatch(path):
         return "/health"
+    if VERSION_PATH.fullmatch(path):
+        return "/version"
     return "/other"
+
+
+def build_identifier():
+    """The build ``GET /version`` reports; see the operator contract above.
+
+    Read per request rather than cached at startup so a test, or an operator
+    restarting under a process manager, sees the environment as it now is.
+    """
+    return os.environ.get("CLAIMS_BUILD") or BUILD_UNSET
 
 
 def _well_formed(claim_id):
@@ -231,7 +254,7 @@ class ClaimsHandler(BaseHTTPRequestHandler):
     def _get(self, path):
         if VERSION_PATH.fullmatch(path):
             # Reports the running build; set CLAIMS_BUILD at deploy time.
-            return self._send_json(200, {"build": os.environ.get("CLAIMS_BUILD", "dev")})
+            return self._send_json(200, {"build": build_identifier()})
         if HEALTH_PATH.fullmatch(path):
             return self._send_json(200, {"status": "ok"})
         match = LETTERS_PATH.fullmatch(path)
@@ -270,7 +293,7 @@ class ClaimsHandler(BaseHTTPRequestHandler):
         return self._send_json(200, details)
 
     def _method_not_allowed(self, path):
-        if HEALTH_PATH.fullmatch(path) or CLAIMS_PATH.fullmatch(path):
+        if HEALTH_PATH.fullmatch(path) or VERSION_PATH.fullmatch(path) or CLAIMS_PATH.fullmatch(path):
             return self._send_json(405, METHOD_NOT_ALLOWED, {"Allow": "GET"})
         if LETTERS_PATH.fullmatch(path) and self.server.letters_key_digests:
             return self._send_json(405, METHOD_NOT_ALLOWED, {"Allow": "GET"})
@@ -308,6 +331,11 @@ def main():
         logger.info("letters endpoint enabled (%d keys)", len(api_keys))
     else:
         logger.info("letters endpoint disabled: CLAIMS_LETTERS_API_KEYS is not set")
+    if os.environ.get("CLAIMS_BUILD"):
+        # Safe to log: the operator contract for this value is a plain build id.
+        logger.info("build identifier %s", build_identifier())
+    else:
+        logger.info("CLAIMS_BUILD is not set: /version reports %s", BUILD_UNSET)
     bound_host, bound_port = server.server_address[:2]
     logger.info("listening on %s:%d", bound_host, bound_port)
     try:
