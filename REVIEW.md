@@ -23,7 +23,7 @@ Report at most five nits per review; summarize the rest as a count.
 - Anything `make lint` (pyflakes) already catches: unused imports, undefined names, unused variables. Tell the author to run it instead.
 - Byte-compile failures; `make build` catches those.
 - There are no generated paths yet. Add them here when `.claude/protected-paths` gains entries.
-- There is no CI yet, so nothing else is enforced automatically. Prune this list as CI takes things over.
+- What CI already enforces: `make build`, `make test` and `make lint` run on every PR (`.github/workflows/ci.yml`), the build is byte-compiled, and the detector tests cover `ops/`. Do not report what those would catch.
 
 ## Feedback into CLAUDE.md
 
