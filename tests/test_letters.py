@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 
 from app.claims import STATUSES, get_status
-from app.letters import DETAILS, get_letter_details
+from app.letters import DETAILS, get_letter_details, get_salutation
 
 SEVEN_KEYS = [
     "claim_id",
@@ -61,3 +61,7 @@ def test_date_of_loss_is_iso_date():
     for claim_id in DETAILS:
         value = get_letter_details(claim_id)["date_of_loss"]
         assert date.fromisoformat(value).isoformat() == value
+
+
+def test_salutation_uses_customer_name():
+    assert get_salutation("C-1001") == "Dear B. Example,"
