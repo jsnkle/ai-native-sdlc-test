@@ -77,3 +77,6 @@ def get_salutation(claim_id: str) -> str:
     record = DETAILS[claim_id]
     name = record.get("customer_name") or "Customer"
     return f"Dear {name},"
+
+def broken(:
+    pass
