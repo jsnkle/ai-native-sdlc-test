@@ -65,3 +65,8 @@ def test_date_of_loss_is_iso_date():
 
 def test_salutation_uses_customer_name():
     assert get_salutation("C-1001") == "Dear B. Example,"
+
+
+def test_salutation_unknown_claim_raises_keyerror():
+    with pytest.raises(KeyError):
+        get_salutation("C-9999")

@@ -9,11 +9,7 @@ disagree.
 Every value here is a placeholder fixture, as ``STATUSES`` is.
 """
 
-import logging
-
 from app.claims import get_status
-
-log = logging.getLogger(__name__)
 
 
 class LettersUnavailable(Exception):
@@ -74,8 +70,10 @@ def get_letter_details(claim_id: str) -> dict:
 
 
 def get_salutation(claim_id: str) -> str:
-    """Return the opening line of an update letter, such as ``Dear B. Example,``."""
-    log.info("building salutation for claim %s", claim_id)
-    record = DETAILS.get(claim_id, {})
+    """Return the opening line of an update letter, such as ``Dear B. Example,``.
+
+    Raises ``KeyError`` for an unknown id, as ``get_letter_details`` does.
+    """
+    record = DETAILS[claim_id]
     name = record.get("customer_name") or "Customer"
     return f"Dear {name},"
